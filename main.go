@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"time"
 
 	cognitosrp "github.com/alexrudd/cognito-srp/v4"
@@ -16,11 +17,21 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentity"
 	cip "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/spf13/viper"
 )
 
+const (
+	payloadHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+)
+
 type Config struct {
+	Region  string
 	Cognito CognitoConfig
+	Gateway APIGateway
+	IoT     AWSIoT
+
+	Installation Installation
 }
 
 type CognitoConfig struct {
@@ -29,6 +40,18 @@ type CognitoConfig struct {
 	UserPoolID     string `mapstructure:"user_pool_id"`
 	ClientID       string `mapstructure:"client_id"`
 	IdentityPoolID string `mapstructure:"identity_pool_id"`
+}
+
+type APIGateway struct {
+	Name string
+}
+
+type AWSIoT struct {
+	Name string
+}
+
+type Installation struct {
+	ID string
 }
 
 func main() {
@@ -107,18 +130,20 @@ func main() {
 	getIdResp, err := ci.GetId(ctx, &cognitoidentity.GetIdInput{
 		IdentityPoolId: aws.String(c.Cognito.IdentityPoolID),
 		Logins: map[string]string{
-			"cognito-idp.eu-central-1.amazonaws.com/" + c.Cognito.UserPoolID: *ciResp.AuthenticationResult.IdToken,
+			fmt.Sprintf("cognito-idp.%s.amazonaws.com/%s", c.Region, c.Cognito.UserPoolID): *ciResp.AuthenticationResult.IdToken,
 		},
 	})
 	if err != nil {
 		log.Fatal("ci.GetId failed: ", err)
 	}
+	identityID := *getIdResp.IdentityId
+	fmt.Println("IdentityId: " + identityID)
 
 	// Step 2: Get Credentials for Identity
 	credsResp, err := ci.GetCredentialsForIdentity(ctx, &cognitoidentity.GetCredentialsForIdentityInput{
-		IdentityId: getIdResp.IdentityId,
+		IdentityId: &identityID,
 		Logins: map[string]string{
-			"cognito-idp.eu-central-1.amazonaws.com/" + c.Cognito.UserPoolID: *ciResp.AuthenticationResult.IdToken,
+			fmt.Sprintf("cognito-idp.%s.amazonaws.com/%s", c.Region, c.Cognito.UserPoolID): *ciResp.AuthenticationResult.IdToken,
 		},
 	})
 	if err != nil {
@@ -127,7 +152,7 @@ func main() {
 	creds := credsResp.Credentials
 
 	// Step 3: Create a signed HTTP request to your API
-	apiURL := "https://jfe3pa3bw8.execute-api.eu-central-1.amazonaws.com/Prod/get-installations"
+	apiURL := fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/Prod/get-installations", c.Gateway.Name, c.Region)
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
 		log.Fatal("http.NewRequest failed: " + err.Error())
@@ -142,17 +167,17 @@ func main() {
 		Source:          "CognitoIdentity",
 	}
 
-	payloadHash := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-	err = signer.SignHTTP(context.TODO(), awsCreds, req, payloadHash, "execute-api", "eu-central-1", time.Now())
+	now := time.Now()
+	err = signer.SignHTTP(context.TODO(), awsCreds, req, payloadHash, "execute-api", c.Region, now)
 	if err != nil {
-		panic("failed to sign request: " + err.Error())
+		log.Fatal("signer.SignHTTP failed: " + err.Error())
 	}
 
 	// Step 4: Send the request
 	client := http.Client{}
 	httpResp, err := client.Do(req)
 	if err != nil {
-		panic("request failed: " + err.Error())
+		log.Fatal("client.Do failed: " + err.Error())
 	}
 	defer httpResp.Body.Close()
 
@@ -160,4 +185,80 @@ func main() {
 
 	fmt.Println("Status:", httpResp.Status)
 	fmt.Println("Response:", string(body))
+
+	// Step 5: Connect to MQTT
+	sessionToken := creds.SessionToken
+	awsCreds.SessionToken = "" // ????
+
+	mqttURL := fmt.Sprintf("wss://%s.iot.%s.amazonaws.com/mqtt", c.IoT.Name, c.Region)
+	req, err = http.NewRequest("GET", mqttURL, nil)
+	if err != nil {
+		log.Fatal("http.NewRequest mqtt failed: ", err)
+	}
+
+	signedURL, _, err := signer.PresignHTTP(
+		ctx,
+		awsCreds,
+		req,
+		payloadHash,
+		"iotdevicegateway",
+		c.Region,
+		now,
+	)
+	if err != nil {
+		log.Fatal("signer.PresignHTTP mqtt failed: ", err)
+	}
+
+	if sessionToken != nil {
+		signedURL += "&X-Amz-Security-Token=" + url.QueryEscape(*sessionToken)
+	}
+
+	fmt.Println(signedURL)
+
+	opts := mqtt.NewClientOptions()
+	opts.ProtocolVersion = 3
+	opts.AddBroker(signedURL)
+
+	clientID := fmt.Sprintf("%s-%d", identityID, now.Unix()*1000)
+	fmt.Println(clientID)
+
+	opts.SetClientID(clientID)
+
+	mqttClient := mqtt.NewClient(opts)
+	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
+		log.Fatal("MQTT connect error: ", token.Error())
+	}
+
+	// Step 6. Subscribe to installation notifications and responses
+
+	if token := mqttClient.Subscribe(fmt.Sprintf("%s/installationNotifications", c.Installation.ID), 1, func(client mqtt.Client, msg mqtt.Message) {
+		log.Printf("Message received on %s: %s", msg.Topic(), string(msg.Payload()))
+	}); token.Wait() && token.Error() != nil {
+		log.Fatalf("Subscribe failed: %v", token.Error())
+	}
+
+	if token2 := mqttClient.Subscribe(fmt.Sprintf("%s/%s/installationResponse", c.Installation.ID, clientID), 1, func(client mqtt.Client, msg mqtt.Message) {
+		log.Printf("Message 2 received on %s: %s", msg.Topic(), string(msg.Payload()))
+	}); token2.Wait() && token2.Error() != nil {
+		log.Fatalf("Subscribe 2 failed: %v", token2.Error())
+	}
+
+	// Step 7. Publish GET_VALUES
+	token := mqttClient.Publish(
+		fmt.Sprintf("%s/%s/installationRequest", c.Installation.ID, clientID),
+		1,
+		false,
+		`{"transactionId":"2","operations":[{"name":"GET_VALUES","targets":[{"component":"1007376820","parameters":["u6342","u6338","u81","u6630","u6639","u7074","u6640","u6343","u6344","u86","u7015","u6417","u6418","u6419","u6420","u6421","u6422","u6423","u6904","u7076","u6205","u6209","u6207","u6212","u6208","u6350","u6353","u6938","u6931","u6939","u6322","u6828","u6809","u6202","u6829","u6203","u6273","u6270","u6265","u6288","u6285","u6306","u6300","u6354","u7151","u78","u6699","u6705"]}]}]}`, // message payload
+	)
+	token.Wait()
+	if err := token.Error(); err != nil {
+		log.Fatalf("Publish error: %v", err)
+	} else {
+		log.Println("Message published successfully")
+	}
+
+	// Don't need to implement ping for now
+	for {
+		time.Sleep(100 * time.Millisecond)
+	}
 }
