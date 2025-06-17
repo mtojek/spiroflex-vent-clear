@@ -117,9 +117,9 @@ func main() {
 		}
 
 		// print the tokens
-		fmt.Printf("Access Token: %s\n", *ciResp.AuthenticationResult.AccessToken)
-		fmt.Printf("ID Token: %s\n", *ciResp.AuthenticationResult.IdToken)
-		fmt.Printf("Refresh Token: %s\n", *ciResp.AuthenticationResult.RefreshToken)
+		log.Printf("Access Token: %s\n", *ciResp.AuthenticationResult.AccessToken)
+		log.Printf("ID Token: %s\n", *ciResp.AuthenticationResult.IdToken)
+		log.Printf("Refresh Token: %s\n", *ciResp.AuthenticationResult.RefreshToken)
 	} else {
 		log.Fatal("other challenges await")
 	}
@@ -137,7 +137,7 @@ func main() {
 		log.Fatal("ci.GetId failed: ", err)
 	}
 	identityID := *getIdResp.IdentityId
-	fmt.Println("IdentityId: " + identityID)
+	log.Println("IdentityId: " + identityID)
 
 	// Step 2: Get Credentials for Identity
 	credsResp, err := ci.GetCredentialsForIdentity(ctx, &cognitoidentity.GetCredentialsForIdentityInput{
@@ -183,8 +183,8 @@ func main() {
 
 	body, _ := io.ReadAll(httpResp.Body)
 
-	fmt.Println("Status:", httpResp.Status)
-	fmt.Println("Response:", string(body))
+	log.Println("Status:", httpResp.Status)
+	log.Println("Response:", string(body))
 
 	// Step 5: Connect to MQTT
 	sessionToken := creds.SessionToken
@@ -213,14 +213,14 @@ func main() {
 		signedURL += "&X-Amz-Security-Token=" + url.QueryEscape(*sessionToken)
 	}
 
-	fmt.Println(signedURL)
+	log.Println(signedURL)
 
 	opts := mqtt.NewClientOptions()
 	opts.ProtocolVersion = 3
 	opts.AddBroker(signedURL)
 
 	clientID := fmt.Sprintf("%s-%d", identityID, now.Unix()*1000)
-	fmt.Println(clientID)
+	log.Println(clientID)
 
 	opts.SetClientID(clientID)
 
