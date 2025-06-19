@@ -243,8 +243,23 @@ func main() {
 		log.Fatalf("Subscribe 2 failed: %v", token2.Error())
 	}
 
-	// Step 7. Publish GET_VALUES
+	// Step 7. Publish GET_COMPONENTS_ON_BUS
 	token := mqttClient.Publish(
+		fmt.Sprintf("%s/%s/installationRequest", c.Installation.ID, clientID),
+		1,
+		false,
+		`{"transactionId":"1","operations":[{"name":"GET_COMPONENTS_ON_BUS"}]}`, // tryb reczny
+	)
+	token.Wait()
+	if err := token.Error(); err != nil {
+		log.Fatalf("Publish error: %v", err)
+	} else {
+		log.Println("Message published successfully")
+	}
+	time.Sleep(200 * time.Millisecond)
+
+	// Step 7. Publish GET_VALUES
+	token = mqttClient.Publish(
 		fmt.Sprintf("%s/%s/installationRequest", c.Installation.ID, clientID),
 		1,
 		false,
@@ -257,9 +272,9 @@ func main() {
 		log.Println("Message published successfully")
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
-	// Step 8.
+	// Step 8. Tryb reczny & moc 3
 	token = mqttClient.Publish(
 		fmt.Sprintf("%s/%s/installationRequest", c.Installation.ID, clientID),
 		1,
@@ -273,7 +288,7 @@ func main() {
 		log.Println("Message published successfully")
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	token = mqttClient.Publish(
 		fmt.Sprintf("%s/%s/installationRequest", c.Installation.ID, clientID),
