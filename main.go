@@ -257,6 +257,37 @@ func main() {
 		log.Println("Message published successfully")
 	}
 
+	time.Sleep(500 * time.Millisecond)
+
+	// Step 8.
+	token = mqttClient.Publish(
+		fmt.Sprintf("%s/%s/installationRequest", c.Installation.ID, clientID),
+		1,
+		false,
+		`{"transactionId":"3","operations":[{"name":"PARAMS_MODIFICATION","targets":[{"component":"1007376820","parameters":{"u6630":"H0L1"}}]}]}`, // tryb reczny
+	)
+	token.Wait()
+	if err := token.Error(); err != nil {
+		log.Fatalf("Publish error: %v", err)
+	} else {
+		log.Println("Message published successfully")
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	token = mqttClient.Publish(
+		fmt.Sprintf("%s/%s/installationRequest", c.Installation.ID, clientID),
+		1,
+		false,
+		`{"transactionId":"4","operations":[{"name":"PARAMS_MODIFICATION","targets":[{"component":"1007376820","parameters":{"u81":"5"}}]}]}`, // moc 3
+	)
+	token.Wait()
+	if err := token.Error(); err != nil {
+		log.Fatalf("Publish error: %v", err)
+	} else {
+		log.Println("Message published successfully")
+	}
+
 	// Don't need to implement ping for now
 	for {
 		time.Sleep(100 * time.Millisecond)
