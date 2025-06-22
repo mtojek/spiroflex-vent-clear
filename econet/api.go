@@ -11,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	signer "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentity/types"
-	"github.com/mtojek/spiroflex-vent-clear/app"
+	"github.com/mtojek/spiroflex-vent-clear"
 )
 
 const payloadHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -23,7 +23,7 @@ type Installation struct {
 	IsConnected bool   `json:"isConnected"`
 }
 
-func Installations(ctx context.Context, c *app.Config, creds *cognitotypes.Credentials) ([]Installation, error) {
+func Installations(ctx context.Context, c *spiroflex.Config, creds *cognitotypes.Credentials) ([]Installation, error) {
 	url := fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/Prod/get-installations", c.Gateway.Name, c.Region)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

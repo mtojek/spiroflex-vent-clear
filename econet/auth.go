@@ -12,11 +12,11 @@ import (
 	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentity/types"
 	cip "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
-	"github.com/mtojek/spiroflex-vent-clear/app"
+	"github.com/mtojek/spiroflex-vent-clear"
 )
 
-func Auth(ctx context.Context, c *app.Config) (string, *cognitotypes.Credentials, error) {
-	awsCfg, err := app.LoadAWSConfig(ctx, c)
+func Auth(ctx context.Context, c *spiroflex.Config) (string, *cognitotypes.Credentials, error) {
+	awsCfg, err := spiroflex.LoadAWSConfig(ctx, c)
 	if err != nil {
 		return "", nil, fmt.Errorf("unable to load AWS config: %w", err)
 	}
@@ -52,7 +52,7 @@ func Auth(ctx context.Context, c *app.Config) (string, *cognitotypes.Credentials
 	return identityID, credsResp.Credentials, nil
 }
 
-func cognitoAuthenticate(ctx context.Context, c *app.Config, awsCfg aws.Config) (*types.AuthenticationResultType, error) {
+func cognitoAuthenticate(ctx context.Context, c *spiroflex.Config, awsCfg aws.Config) (*types.AuthenticationResultType, error) {
 	srp, err := initSRP(c)
 	if err != nil {
 		return nil, fmt.Errorf("initiate SRP failed: %w", err)
@@ -91,7 +91,7 @@ func cognitoAuthenticate(ctx context.Context, c *app.Config, awsCfg aws.Config) 
 	return tokens, nil
 }
 
-func initSRP(c *app.Config) (*cognitosrp.CognitoSRP, error) {
+func initSRP(c *spiroflex.Config) (*cognitosrp.CognitoSRP, error) {
 	srp, err := cognitosrp.NewCognitoSRP(
 		c.Cognito.Username,
 		c.Cognito.Password,

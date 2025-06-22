@@ -6,13 +6,13 @@ import (
 	"net/http"
 	"slices"
 
+	"github.com/mtojek/spiroflex-vent-clear"
 	"github.com/mtojek/spiroflex-vent-clear/api"
-	"github.com/mtojek/spiroflex-vent-clear/app"
 	"github.com/mtojek/spiroflex-vent-clear/econet"
 )
 
 func main2() {
-	c, err := app.LoadConfig()
+	c, err := spiroflex.LoadConfig()
 	if err != nil {
 		log.Fatalf("can't load config: %v", err)
 	}
@@ -31,7 +31,7 @@ func main2() {
 func main() {
 	ctx := context.Background()
 
-	c, err := app.LoadConfig()
+	c, err := spiroflex.LoadConfig()
 	if err != nil {
 		log.Fatal(err)
 	}

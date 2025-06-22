@@ -12,10 +12,10 @@ import (
 	signer "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentity/types"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"github.com/mtojek/spiroflex-vent-clear/app"
+	"github.com/mtojek/spiroflex-vent-clear"
 )
 
-func MQTT(ctx context.Context, c *app.Config, creds *cognitotypes.Credentials, identityID string, installationID string) error {
+func MQTT(ctx context.Context, c *spiroflex.Config, creds *cognitotypes.Credentials, identityID string, installationID string) error {
 	now := time.Now()
 
 	s := signer.NewSigner()
@@ -88,7 +88,7 @@ func subscribe(client mqtt.Client, topic string, handler mqtt.MessageHandler) er
 	return t.Error()
 }
 
-func publish(client mqtt.Client, c *app.Config, clientID, txnID, op string, installationID string) error {
+func publish(client mqtt.Client, c *spiroflex.Config, clientID, txnID, op string, installationID string) error {
 	topic := fmt.Sprintf("%s/%s/installationRequest", installationID, clientID)
 	payload := fmt.Sprintf(`{"transactionId":"%s","operations":[%s]}`, txnID, op)
 
