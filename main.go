@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"slices"
 
 	"github.com/mtojek/spiroflex-vent-clear/api"
 	"github.com/mtojek/spiroflex-vent-clear/app"
@@ -40,11 +41,19 @@ func main() {
 		log.Fatalf("failed to fetch credentials: %v", err)
 	}
 
-	if err := econet.Installations(ctx, c, creds); err != nil {
+	installations, err := econet.Installations(ctx, c, creds)
+	if err != nil {
 		log.Fatalf("API call failed: %v", err)
 	}
 
-	if err := econet.MQTT(ctx, c, creds, identityID); err != nil {
+	i := slices.IndexFunc(installations, func(ins econet.Installation) bool {
+		return ins.Name == c.Installation.Name
+	})
+	if i < 0 {
+		log.Fatal("Installation not found or invalid name")
+	}
+
+	if err := econet.MQTT(ctx, c, creds, identityID, installations[i].ID); err != nil {
 		log.Fatalf("MQTT error: %v", err)
 	}
 }
