@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -45,7 +45,7 @@ type API struct {
 	Endpoint string
 }
 
-func loadConfig() (*Config, error) {
+func LoadConfig() (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
@@ -61,7 +61,7 @@ func loadConfig() (*Config, error) {
 	return &c, nil
 }
 
-func loadAWSConfig(ctx context.Context, c *Config) (*aws.Config, error) {
+func LoadAWSConfig(ctx context.Context, c *Config) (*aws.Config, error) {
 	awsConfig, err := awsconfig.LoadDefaultConfig(
 		ctx,
 		config.WithRegion(c.Region),

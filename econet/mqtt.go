@@ -1,4 +1,4 @@
-package main
+package econet
 
 import (
 	"context"
@@ -12,9 +12,10 @@ import (
 	signer "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentity/types"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/mtojek/spiroflex-vent-clear/app"
 )
 
-func connect(ctx context.Context, cfg *Config, creds *cognitotypes.Credentials, identityID string) error {
+func MQTT(ctx context.Context, c *app.Config, creds *cognitotypes.Credentials, identityID string) error {
 	now := time.Now()
 
 	s := signer.NewSigner()
@@ -24,13 +25,13 @@ func connect(ctx context.Context, cfg *Config, creds *cognitotypes.Credentials, 
 		Source:          "CognitoIdentity",
 	}
 
-	mqttURL := fmt.Sprintf("wss://%s.iot.%s.amazonaws.com/mqtt", cfg.IoT.Name, cfg.Region)
+	mqttURL := fmt.Sprintf("wss://%s.iot.%s.amazonaws.com/mqtt", c.IoT.Name, c.Region)
 	req, err := http.NewRequest("GET", mqttURL, nil)
 	if err != nil {
 		return fmt.Errorf("new mqtt request failed: %w", err)
 	}
 
-	signedURL, _, err := s.PresignHTTP(ctx, awsCreds, req, payloadHash, "iotdevicegateway", cfg.Region, now)
+	signedURL, _, err := s.PresignHTTP(ctx, awsCreds, req, payloadHash, "iotdevicegateway", c.Region, now)
 	if err != nil {
 		return fmt.Errorf("presign mqtt failed: %w", err)
 	}
@@ -51,24 +52,24 @@ func connect(ctx context.Context, cfg *Config, creds *cognitotypes.Credentials, 
 	}
 
 	// Subscriptions
-	if err := subscribe(client, fmt.Sprintf("%s/installationNotifications", cfg.Installation.ID), logMessage); err != nil {
+	if err := subscribe(client, fmt.Sprintf("%s/installationNotifications", c.Installation.ID), logMessage); err != nil {
 		return fmt.Errorf("subscribe 1 failed: %w", err)
 	}
-	if err := subscribe(client, fmt.Sprintf("%s/%s/installationResponse", cfg.Installation.ID, clientID), logMessage); err != nil {
+	if err := subscribe(client, fmt.Sprintf("%s/%s/installationResponse", c.Installation.ID, clientID), logMessage); err != nil {
 		return fmt.Errorf("subscribe 2 failed: %w", err)
 	}
 
 	// Publications
-	if err := publish(client, cfg, clientID, "1", `{"name":"GET_COMPONENTS_ON_BUS"}`); err != nil {
+	if err := publish(client, c, clientID, "1", `{"name":"GET_COMPONENTS_ON_BUS"}`); err != nil {
 		return err
 	}
-	if err := publish(client, cfg, clientID, "2", `{"name":"GET_VALUES","targets":[{"component":"1007376820","parameters":["u6342","u6338","u81","u6630","u6639","u7074","u6640","u6343","u6344","u86","u7015","u6417","u6418","u6419","u6420","u6421","u6422","u6423","u6904","u7076","u6205","u6209","u6207","u6212","u6208","u6350","u6353","u6938","u6931","u6939","u6322","u6828","u6809","u6202","u6829","u6203","u6273","u6270","u6265","u6288","u6285","u6306","u6300","u6354","u7151","u78","u6699","u6705"]}]}`); err != nil {
+	if err := publish(client, c, clientID, "2", `{"name":"GET_VALUES","targets":[{"component":"1007376820","parameters":["u6342","u6338","u81","u6630","u6639","u7074","u6640","u6343","u6344","u86","u7015","u6417","u6418","u6419","u6420","u6421","u6422","u6423","u6904","u7076","u6205","u6209","u6207","u6212","u6208","u6350","u6353","u6938","u6931","u6939","u6322","u6828","u6809","u6202","u6829","u6203","u6273","u6270","u6265","u6288","u6285","u6306","u6300","u6354","u7151","u78","u6699","u6705"]}]}`); err != nil {
 		return err
 	}
-	if err := publish(client, cfg, clientID, "3", `{"name":"PARAMS_MODIFICATION","targets":[{"component":"1007376820","parameters":{"u6630":"H0L1"}}]}`); err != nil {
+	if err := publish(client, c, clientID, "3", `{"name":"PARAMS_MODIFICATION","targets":[{"component":"1007376820","parameters":{"u6630":"H0L1"}}]}`); err != nil {
 		return err
 	}
-	if err := publish(client, cfg, clientID, "4", `{"name":"PARAMS_MODIFICATION","targets":[{"component":"1007376820","parameters":{"u81":"5"}}]}`); err != nil {
+	if err := publish(client, c, clientID, "4", `{"name":"PARAMS_MODIFICATION","targets":[{"component":"1007376820","parameters":{"u81":"5"}}]}`); err != nil {
 		return err
 	}
 
@@ -87,8 +88,8 @@ func subscribe(client mqtt.Client, topic string, handler mqtt.MessageHandler) er
 	return t.Error()
 }
 
-func publish(client mqtt.Client, cfg *Config, clientID, txnID, op string) error {
-	topic := fmt.Sprintf("%s/%s/installationRequest", cfg.Installation.ID, clientID)
+func publish(client mqtt.Client, c *app.Config, clientID, txnID, op string) error {
+	topic := fmt.Sprintf("%s/%s/installationRequest", c.Installation.ID, clientID)
 	payload := fmt.Sprintf(`{"transactionId":"%s","operations":[%s]}`, txnID, op)
 
 	t := client.Publish(topic, 1, false, payload)

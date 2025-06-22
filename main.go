@@ -4,21 +4,21 @@ import (
 	"context"
 	"log"
 	"net/http"
-)
 
-const (
-	payloadHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	"github.com/mtojek/spiroflex-vent-clear/api"
+	"github.com/mtojek/spiroflex-vent-clear/app"
+	"github.com/mtojek/spiroflex-vent-clear/econet"
 )
 
 func main2() {
-	c, err := loadConfig()
+	c, err := app.LoadConfig()
 	if err != nil {
 		log.Fatalf("can't load config: %v", err)
 	}
 
 	srv := &http.Server{
 		Addr:    c.API.Endpoint,
-		Handler: createAPI(),
+		Handler: api.Create(),
 	}
 
 	log.Printf("Server started at %v", c.API.Endpoint)
@@ -28,33 +28,23 @@ func main2() {
 }
 
 func main() {
-	c, err := loadConfig()
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	ctx := context.Background()
-	awsCfg, err := loadAWSConfig(ctx, c)
+
+	c, err := app.LoadConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	srp, err := initSRP(c)
-	authResult, err := authenticate(ctx, *awsCfg, srp)
-	if err != nil {
-		log.Fatalf("authentication failed: %v", err)
-	}
-
-	identityID, creds, err := fetchCredentials(ctx, *awsCfg, c, *authResult.IdToken)
+	identityID, creds, err := econet.Auth(ctx, c)
 	if err != nil {
 		log.Fatalf("failed to fetch credentials: %v", err)
 	}
 
-	if err := getInstallations(ctx, c, creds); err != nil {
+	if err := econet.Installations(ctx, c, creds); err != nil {
 		log.Fatalf("API call failed: %v", err)
 	}
 
-	if err := connect(ctx, c, creds, identityID); err != nil {
+	if err := econet.MQTT(ctx, c, creds, identityID); err != nil {
 		log.Fatalf("MQTT error: %v", err)
 	}
 }

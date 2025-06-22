@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"net/http"
@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-func createAPI() http.Handler {
+func Create() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
