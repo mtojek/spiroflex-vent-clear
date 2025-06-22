@@ -11,6 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cognitoidentity v1.29.5
 	github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider v1.53.1
 	github.com/eclipse/paho.mqtt.golang v1.5.0
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/spf13/viper v1.20.1
 )
 
