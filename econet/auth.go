@@ -3,7 +3,6 @@ package econet
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	cognitosrp "github.com/alexrudd/cognito-srp/v4"
@@ -47,8 +46,6 @@ func auth(ctx context.Context, c *spiroflex.Config) (string, *cognitotypes.Crede
 	if err != nil {
 		return "", nil, fmt.Errorf("unable to get Cognito credentials: %w", err)
 	}
-
-	log.Println("IdentityId:", identityID)
 	return identityID, credsResp.Credentials, nil
 }
 
@@ -87,7 +84,6 @@ func cognitoAuthenticate(ctx context.Context, c *spiroflex.Config, awsCfg aws.Co
 	}
 
 	tokens := resp.AuthenticationResult
-	log.Printf("Access Token: %s\nID Token: %s\nRefresh Token: %s\n", *tokens.AccessToken, *tokens.IdToken, *tokens.RefreshToken)
 	return tokens, nil
 }
 

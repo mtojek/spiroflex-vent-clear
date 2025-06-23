@@ -32,11 +32,17 @@ type MQTTSession struct {
 }
 
 func (s *MQTTSession) startReceiving() error {
-	err := s.subscribe(fmt.Sprintf("%s/installationNotifications", s.installationID), s.onTransactionalMessage)
+	inTopic := fmt.Sprintf("%s/installationNotifications", s.installationID)
+	irTopic := fmt.Sprintf("%s/%s/installationResponse", s.installationID, s.clientID)
+
+	log.Printf("Start receiving messages on %s", inTopic)
+	err := s.subscribe(inTopic, s.onTransactionalMessage)
 	if err != nil {
 		return fmt.Errorf("unable to subscribe to installationNotifications: %w", err)
 	}
-	err = s.subscribe(fmt.Sprintf("%s/%s/installationResponse", s.installationID, s.clientID), s.onTransactionalMessage)
+
+	log.Printf("Start receiving messages on %s", irTopic)
+	err = s.subscribe(irTopic, s.onTransactionalMessage)
 	if err != nil {
 		return fmt.Errorf("unable to subscribe to installationResponse: %w", err)
 	}
@@ -51,6 +57,8 @@ func (s *MQTTSession) subscribe(topic string, handler mqtt.MessageHandler) error
 
 func (s *MQTTSession) onTransactionalMessage(client mqtt.Client, msg mqtt.Message) {
 	log.Printf("Message received on %s: %s", msg.Topic(), string(msg.Payload()))
+
+	// TODO
 }
 
 func (c *Client) MQTT(ctx context.Context, installationID string) (*MQTTSession, error) {
@@ -92,6 +100,7 @@ func (c *Client) MQTT(ctx context.Context, installationID string) (*MQTTSession,
 	if token.Error() != nil {
 		return nil, fmt.Errorf("unable to connect to MQTT broker: %w", token.Error())
 	}
+	log.Printf("MQTT client connected, installationID: %s, clientID: %s", installationID, clientID)
 
 	session := &MQTTSession{
 		clientID:       clientID,
@@ -101,6 +110,9 @@ func (c *Client) MQTT(ctx context.Context, installationID string) (*MQTTSession,
 	}
 	err = session.startReceiving()
 	if err != nil {
+		log.Println("MQTT client will disconnect due to error")
+		client.Disconnect(0)
+
 		return nil, fmt.Errorf("unable to start receiving: %w", err)
 	}
 	return session, nil
