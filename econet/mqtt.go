@@ -2,10 +2,12 @@ package econet
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -14,7 +16,44 @@ import (
 	"github.com/mtojek/spiroflex-vent-clear"
 )
 
-func (c *Client) MQTT(ctx context.Context, installationID string) error {
+const (
+	mqttConnectTimeout   = 10 * time.Second
+	mqttSubscribeTimeout = 5 * time.Second
+)
+
+type MQTTSession struct {
+	clientID       string
+	installationID string
+
+	client mqtt.Client
+
+	m       sync.Mutex
+	pending map[string]chan []byte
+}
+
+func (s *MQTTSession) startReceiving() error {
+	err := s.subscribe(fmt.Sprintf("%s/installationNotifications", s.installationID), s.onTransactionalMessage)
+	if err != nil {
+		return fmt.Errorf("unable to subscribe to installationNotifications: %w", err)
+	}
+	err = s.subscribe(fmt.Sprintf("%s/%s/installationResponse", s.installationID, s.clientID), s.onTransactionalMessage)
+	if err != nil {
+		return fmt.Errorf("unable to subscribe to installationResponse: %w", err)
+	}
+	return nil
+}
+
+func (s *MQTTSession) subscribe(topic string, handler mqtt.MessageHandler) error {
+	t := s.client.Subscribe(topic, 1, handler)
+	t.WaitTimeout(mqttSubscribeTimeout)
+	return t.Error()
+}
+
+func (s *MQTTSession) onTransactionalMessage(client mqtt.Client, msg mqtt.Message) {
+	log.Printf("Message received on %s: %s", msg.Topic(), string(msg.Payload()))
+}
+
+func (c *Client) MQTT(ctx context.Context, installationID string) (*MQTTSession, error) {
 	now := time.Now()
 
 	s := signer.NewSigner()
@@ -27,12 +66,12 @@ func (c *Client) MQTT(ctx context.Context, installationID string) error {
 	mqttURL := fmt.Sprintf("wss://%s.iot.%s.amazonaws.com/mqtt", c.cfg.IoT.Name, c.cfg.Region)
 	req, err := http.NewRequest("GET", mqttURL, nil)
 	if err != nil {
-		return fmt.Errorf("new mqtt request failed: %w", err)
+		return nil, fmt.Errorf("can't build HTTP request: %w", err)
 	}
 
 	signedURL, _, err := s.PresignHTTP(ctx, awsCreds, req, payloadHash, "iotdevicegateway", c.cfg.Region, now)
 	if err != nil {
-		return fmt.Errorf("presign mqtt failed: %w", err)
+		return nil, fmt.Errorf("unable to presign MQTT URL: %w", err)
 	}
 
 	if c.creds.SessionToken != nil {
@@ -46,20 +85,28 @@ func (c *Client) MQTT(ctx context.Context, installationID string) error {
 		SetProtocolVersion(3)
 
 	client := mqtt.NewClient(opts)
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		return fmt.Errorf("mqtt connect failed: %w", token.Error())
+	token := client.Connect()
+	if !token.WaitTimeout(mqttConnectTimeout) {
+		return nil, errors.New("connection to MQTT broker timed out")
+	}
+	if token.Error() != nil {
+		return nil, fmt.Errorf("unable to connect to MQTT broker: %w", token.Error())
 	}
 
-	// Subscriptions
-	if err := subscribe(client, fmt.Sprintf("%s/installationNotifications", installationID), logMessage); err != nil {
-		return fmt.Errorf("subscribe 1 failed: %w", err)
+	session := &MQTTSession{
+		clientID:       clientID,
+		installationID: installationID,
+
+		client: client,
 	}
-	if err := subscribe(client, fmt.Sprintf("%s/%s/installationResponse", installationID, clientID), logMessage); err != nil {
-		return fmt.Errorf("subscribe 2 failed: %w", err)
+	err = session.startReceiving()
+	if err != nil {
+		return nil, fmt.Errorf("unable to start receiving: %w", err)
 	}
+	return session, nil
 
 	// Publications
-	if err := publish(client, c.cfg, clientID, "1", `{"name":"GET_COMPONENTS_ON_BUS"}`, installationID); err != nil {
+	/*if err := publish(client, c.cfg, clientID, "1", `{"name":"GET_COMPONENTS_ON_BUS"}`, installationID); err != nil {
 		return err
 	}
 	if err := publish(client, c.cfg, clientID, "2", `{"name":"GET_VALUES","targets":[{"component":"1007376820","parameters":["u6342","u6338","u81","u6630","u6639","u7074","u6640","u6343","u6344","u86","u7015","u6417","u6418","u6419","u6420","u6421","u6422","u6423","u6904","u7076","u6205","u6209","u6207","u6212","u6208","u6350","u6353","u6938","u6931","u6939","u6322","u6828","u6809","u6202","u6829","u6203","u6273","u6270","u6265","u6288","u6285","u6306","u6300","u6354","u7151","u78","u6699","u6705"]}]}`, installationID); err != nil {
@@ -74,17 +121,7 @@ func (c *Client) MQTT(ctx context.Context, installationID string) error {
 
 	for {
 		time.Sleep(100 * time.Millisecond)
-	}
-}
-
-func logMessage(client mqtt.Client, msg mqtt.Message) {
-	log.Printf("Message received on %s: %s", msg.Topic(), string(msg.Payload()))
-}
-
-func subscribe(client mqtt.Client, topic string, handler mqtt.MessageHandler) error {
-	t := client.Subscribe(topic, 1, handler)
-	t.Wait()
-	return t.Error()
+	}*/
 }
 
 func publish(client mqtt.Client, c *spiroflex.Config, clientID, txnID, op string, installationID string) error {

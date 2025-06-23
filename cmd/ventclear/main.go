@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"slices"
+	"time"
 
 	"github.com/mtojek/spiroflex-vent-clear"
 	"github.com/mtojek/spiroflex-vent-clear/api"
@@ -53,7 +54,12 @@ func main() {
 		log.Fatal("Installation not found or invalid name")
 	}
 
-	if err := client.MQTT(ctx, installations[i].ID); err != nil {
+	_, err = client.MQTT(ctx, installations[i].ID)
+	if err != nil {
 		log.Fatalf("MQTT error: %v", err)
+	}
+
+	for {
+		time.Sleep(100 * time.Millisecond)
 	}
 }
