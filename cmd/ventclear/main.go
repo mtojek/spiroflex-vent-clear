@@ -36,12 +36,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	identityID, creds, err := econet.Auth(ctx, c)
+	client, err := econet.New(ctx, c)
 	if err != nil {
-		log.Fatalf("failed to fetch credentials: %v", err)
+		log.Fatalf("unable to create client: %v", err)
 	}
 
-	installations, err := econet.Installations(ctx, c, creds)
+	installations, err := client.Installations(ctx)
 	if err != nil {
 		log.Fatalf("API call failed: %v", err)
 	}
@@ -53,7 +53,7 @@ func main() {
 		log.Fatal("Installation not found or invalid name")
 	}
 
-	if err := econet.MQTT(ctx, c, creds, identityID, installations[i].ID); err != nil {
+	if err := client.MQTT(ctx, installations[i].ID); err != nil {
 		log.Fatalf("MQTT error: %v", err)
 	}
 }

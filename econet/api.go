@@ -10,8 +10,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	signer "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
-	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentity/types"
-	"github.com/mtojek/spiroflex-vent-clear"
 )
 
 const payloadHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -23,22 +21,22 @@ type Installation struct {
 	IsConnected bool   `json:"isConnected"`
 }
 
-func Installations(ctx context.Context, c *spiroflex.Config, creds *cognitotypes.Credentials) ([]Installation, error) {
-	url := fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/Prod/get-installations", c.Gateway.Name, c.Region)
+func (c *Client) Installations(ctx context.Context) ([]Installation, error) {
+	url := fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/Prod/get-installations", c.cfg.Gateway.Name, c.cfg.Region)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("new request failed: %w", err)
 	}
 
 	awsCreds := aws.Credentials{
-		AccessKeyID:     *creds.AccessKeyId,
-		SecretAccessKey: *creds.SecretKey,
-		SessionToken:    *creds.SessionToken,
+		AccessKeyID:     *c.creds.AccessKeyId,
+		SecretAccessKey: *c.creds.SecretKey,
+		SessionToken:    *c.creds.SessionToken,
 		Source:          "CognitoIdentity",
 	}
 
 	s := signer.NewSigner()
-	if err := s.SignHTTP(ctx, awsCreds, req, payloadHash, "execute-api", c.Region, time.Now()); err != nil {
+	if err := s.SignHTTP(ctx, awsCreds, req, payloadHash, "execute-api", c.cfg.Region, time.Now()); err != nil {
 		return nil, fmt.Errorf("sign HTTP failed: %w", err)
 	}
 

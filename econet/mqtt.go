@@ -10,37 +10,36 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	signer "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
-	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentity/types"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/mtojek/spiroflex-vent-clear"
 )
 
-func MQTT(ctx context.Context, c *spiroflex.Config, creds *cognitotypes.Credentials, identityID string, installationID string) error {
+func (c *Client) MQTT(ctx context.Context, installationID string) error {
 	now := time.Now()
 
 	s := signer.NewSigner()
 	awsCreds := aws.Credentials{
-		AccessKeyID:     *creds.AccessKeyId,
-		SecretAccessKey: *creds.SecretKey,
+		AccessKeyID:     *c.creds.AccessKeyId,
+		SecretAccessKey: *c.creds.SecretKey,
 		Source:          "CognitoIdentity",
 	}
 
-	mqttURL := fmt.Sprintf("wss://%s.iot.%s.amazonaws.com/mqtt", c.IoT.Name, c.Region)
+	mqttURL := fmt.Sprintf("wss://%s.iot.%s.amazonaws.com/mqtt", c.cfg.IoT.Name, c.cfg.Region)
 	req, err := http.NewRequest("GET", mqttURL, nil)
 	if err != nil {
 		return fmt.Errorf("new mqtt request failed: %w", err)
 	}
 
-	signedURL, _, err := s.PresignHTTP(ctx, awsCreds, req, payloadHash, "iotdevicegateway", c.Region, now)
+	signedURL, _, err := s.PresignHTTP(ctx, awsCreds, req, payloadHash, "iotdevicegateway", c.cfg.Region, now)
 	if err != nil {
 		return fmt.Errorf("presign mqtt failed: %w", err)
 	}
 
-	if creds.SessionToken != nil {
-		signedURL += "&X-Amz-Security-Token=" + url.QueryEscape(*creds.SessionToken)
+	if c.creds.SessionToken != nil {
+		signedURL += "&X-Amz-Security-Token=" + url.QueryEscape(*c.creds.SessionToken)
 	}
 
-	clientID := fmt.Sprintf("%s-%d", identityID, now.UnixMilli())
+	clientID := fmt.Sprintf("%s-%d", c.identityID, now.UnixMilli())
 	opts := mqtt.NewClientOptions().
 		AddBroker(signedURL).
 		SetClientID(clientID).
@@ -60,16 +59,16 @@ func MQTT(ctx context.Context, c *spiroflex.Config, creds *cognitotypes.Credenti
 	}
 
 	// Publications
-	if err := publish(client, c, clientID, "1", `{"name":"GET_COMPONENTS_ON_BUS"}`, installationID); err != nil {
+	if err := publish(client, c.cfg, clientID, "1", `{"name":"GET_COMPONENTS_ON_BUS"}`, installationID); err != nil {
 		return err
 	}
-	if err := publish(client, c, clientID, "2", `{"name":"GET_VALUES","targets":[{"component":"1007376820","parameters":["u6342","u6338","u81","u6630","u6639","u7074","u6640","u6343","u6344","u86","u7015","u6417","u6418","u6419","u6420","u6421","u6422","u6423","u6904","u7076","u6205","u6209","u6207","u6212","u6208","u6350","u6353","u6938","u6931","u6939","u6322","u6828","u6809","u6202","u6829","u6203","u6273","u6270","u6265","u6288","u6285","u6306","u6300","u6354","u7151","u78","u6699","u6705"]}]}`, installationID); err != nil {
+	if err := publish(client, c.cfg, clientID, "2", `{"name":"GET_VALUES","targets":[{"component":"1007376820","parameters":["u6342","u6338","u81","u6630","u6639","u7074","u6640","u6343","u6344","u86","u7015","u6417","u6418","u6419","u6420","u6421","u6422","u6423","u6904","u7076","u6205","u6209","u6207","u6212","u6208","u6350","u6353","u6938","u6931","u6939","u6322","u6828","u6809","u6202","u6829","u6203","u6273","u6270","u6265","u6288","u6285","u6306","u6300","u6354","u7151","u78","u6699","u6705"]}]}`, installationID); err != nil {
 		return err
 	}
-	if err := publish(client, c, clientID, "3", `{"name":"PARAMS_MODIFICATION","targets":[{"component":"1007376820","parameters":{"u6630":"H0L1"}}]}`, installationID); err != nil {
+	if err := publish(client, c.cfg, clientID, "3", `{"name":"PARAMS_MODIFICATION","targets":[{"component":"1007376820","parameters":{"u6630":"H0L1"}}]}`, installationID); err != nil {
 		return err
 	}
-	if err := publish(client, c, clientID, "4", `{"name":"PARAMS_MODIFICATION","targets":[{"component":"1007376820","parameters":{"u81":"5"}}]}`, installationID); err != nil {
+	if err := publish(client, c.cfg, clientID, "4", `{"name":"PARAMS_MODIFICATION","targets":[{"component":"1007376820","parameters":{"u81":"5"}}]}`, installationID); err != nil {
 		return err
 	}
 

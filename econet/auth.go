@@ -15,7 +15,7 @@ import (
 	"github.com/mtojek/spiroflex-vent-clear"
 )
 
-func Auth(ctx context.Context, c *spiroflex.Config) (string, *cognitotypes.Credentials, error) {
+func auth(ctx context.Context, c *spiroflex.Config) (string, *cognitotypes.Credentials, error) {
 	awsCfg, err := spiroflex.LoadAWSConfig(ctx, c)
 	if err != nil {
 		return "", nil, fmt.Errorf("unable to load AWS config: %w", err)
