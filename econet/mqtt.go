@@ -33,79 +33,76 @@ type MQTTSession struct {
 	transactionCounter atomic.Int64
 }
 
-func (s *MQTTSession) startReceiving() error {
-	irTopic := fmt.Sprintf("%s/%s/installationResponse", s.installationID, s.clientID)
-
-	log.Printf("Start receiving messages on %s", irTopic)
-	err := s.subscribe(irTopic, s.onTransactionalMessage)
-	if err != nil {
-		return fmt.Errorf("unable to subscribe to installationResponse: %w", err)
-	}
-	return nil
-}
-
-func (s *MQTTSession) subscribe(topic string, handler mqtt.MessageHandler) error {
-	t := s.client.Subscribe(topic, 1, handler)
-	t.WaitTimeout(mqttSubscribeTimeout)
-	return t.Error()
-}
-
-func (s *MQTTSession) onTransactionalMessage(client mqtt.Client, msg mqtt.Message) {
-	log.Printf("Message received on %s: %s", msg.Topic(), string(msg.Payload()))
-
-	var envelope struct {
-		TransactionID string `json:"transactionId"`
-	}
-
-	err := json.Unmarshal(msg.Payload(), &envelope)
-	if err != nil {
-		log.Printf("Message will be ignored due to error: %w", err)
-		return
-	}
-	if envelope.TransactionID == "" {
-		log.Printf("Message will be ignored due to missing transaction ID")
-		return
-	}
-
-	s.m.Lock()
-	ch, ok := s.pending[envelope.TransactionID]
-	s.m.Unlock()
-
-	if ok {
-		select {
-		case ch <- msg.Payload():
-		default:
-			log.Printf("full channel for transaction ID: %s", envelope.TransactionID)
-		}
-	} else {
-		log.Printf("unexpected messaged received, transaction ID: %s", envelope.TransactionID)
-	}
-}
-
-type Operation struct {
-	Name    string   `json:"name"`
-	Targets []Target `json:"targets,omitempty"`
+type OperationRequest struct {
+	Name    string          `json:"name"`
+	Targets []TargetRequest `json:"targets,omitempty"`
 
 	StatusCode int `json:"statusCode"`
 }
 
-type Target struct {
+type TargetRequest struct {
 	Component  string      `json:"component"`
 	Parameters interface{} `json:"parameters,omitempty"`
+}
+
+type OperationResponse struct {
+	Name    string           `json:"name"`
+	Targets []TargetResponse `json:"targets,omitempty"`
 
 	StatusCode int `json:"statusCode"`
 }
 
-func (s *MQTTSession) SendInstallationRequest(ctx context.Context, ops []Operation) ([]Operation, error) {
-	type envelope struct {
-		TransactionID string      `json:"transactionId"`
-		Operations    []Operation `json:"operations,omitempty"`
+type TargetResponse struct {
+	Component  string          `json:"component"`
+	Parameters json.RawMessage `json:"parameters,omitempty"`
+
+	StatusCode int `json:"statusCode"`
+}
+
+type ComponentOnBus struct {
+	ComponentName   string `json:"componentName"`
+	ClientID        int    `json:"clientId"`
+	DPVersion       string `json:"dpVersion"`
+	HardwareVersion string `json:"hardwareVersion"`
+	ProgramSeries   string `json:"programSeries"`
+	DeviceStatus    int    `json:"deviceStatus"`
+	ZDVersion       string `json:"zdVersion"`
+
+	ComponentID string
+}
+
+func (s *MQTTSession) GetComponentsOnBus(ctx context.Context) ([]ComponentOnBus, error) {
+	resp, err := s.SendInstallationRequest(ctx, []OperationRequest{
+		{
+			Name: GET_COMPONENTS_ON_BUS,
+		},
+	})
+
+	var cobs []ComponentOnBus
+	for _, op := range resp {
+		for _, t := range op.Targets {
+			var cob ComponentOnBus
+			err = json.Unmarshal(t.Parameters, &cob)
+			if err != nil {
+				return nil, fmt.Errorf("can't unmarshal ComponentOnBus struct: %w", err)
+			}
+			cob.ComponentID = t.Component
+			cobs = append(cobs, cob)
+		}
+	}
+	return cobs, nil
+}
+
+func (s *MQTTSession) SendInstallationRequest(ctx context.Context, ops []OperationRequest) ([]OperationResponse, error) {
+	type envelopeRequest struct {
+		TransactionID string             `json:"transactionId"`
+		Operations    []OperationRequest `json:"operations,omitempty"`
 	}
 
 	c := s.transactionCounter.Add(1)
 	transactionID := fmt.Sprintf("%d", c)
 
-	msg, err := json.Marshal(&envelope{
+	msg, err := json.Marshal(&envelopeRequest{
 		TransactionID: transactionID,
 		Operations:    ops,
 	})
@@ -137,10 +134,15 @@ func (s *MQTTSession) SendInstallationRequest(ctx context.Context, ops []Operati
 		return nil, fmt.Errorf("publish error: %w", err)
 	}
 
+	type envelopeResponse struct {
+		TransactionID string              `json:"transactionId"`
+		Operations    []OperationResponse `json:"operations,omitempty"`
+	}
+
 	select {
 	case resp := <-respCh:
 
-		var e envelope
+		var e envelopeResponse
 		err := json.Unmarshal(resp, &e)
 		if err != nil {
 			return nil, fmt.Errorf("unable to unmarshal message, transaction ID: %s, error: %w", transactionID, ctx.Err())
@@ -212,4 +214,53 @@ func (c *Client) MQTT(ctx context.Context, installationID string) (*MQTTSession,
 		return nil, fmt.Errorf("unable to start receiving: %w", err)
 	}
 	return session, nil
+}
+
+func (s *MQTTSession) startReceiving() error {
+	irTopic := fmt.Sprintf("%s/%s/installationResponse", s.installationID, s.clientID)
+
+	log.Printf("Start receiving messages on %s", irTopic)
+	err := s.subscribe(irTopic, s.onTransactionalMessage)
+	if err != nil {
+		return fmt.Errorf("unable to subscribe to installationResponse: %w", err)
+	}
+	return nil
+}
+
+func (s *MQTTSession) subscribe(topic string, handler mqtt.MessageHandler) error {
+	t := s.client.Subscribe(topic, 1, handler)
+	t.WaitTimeout(mqttSubscribeTimeout)
+	return t.Error()
+}
+
+func (s *MQTTSession) onTransactionalMessage(client mqtt.Client, msg mqtt.Message) {
+	log.Printf("Message received on %s: %s", msg.Topic(), string(msg.Payload()))
+
+	var envelope struct {
+		TransactionID string `json:"transactionId"`
+	}
+
+	err := json.Unmarshal(msg.Payload(), &envelope)
+	if err != nil {
+		log.Printf("Message will be ignored due to error: %w", err)
+		return
+	}
+	if envelope.TransactionID == "" {
+		log.Printf("Message will be ignored due to missing transaction ID")
+		return
+	}
+
+	s.m.Lock()
+	ch, ok := s.pending[envelope.TransactionID]
+	s.m.Unlock()
+
+	if ok {
+		select {
+		case ch <- msg.Payload():
+		default:
+			log.Printf("full channel for transaction ID: %s", envelope.TransactionID)
+		}
+	} else {
+		log.Printf("unexpected messaged received, transaction ID: %s", envelope.TransactionID)
+	}
 }

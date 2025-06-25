@@ -59,37 +59,25 @@ func main() {
 	}
 	defer session.Disconnect()
 
-	gcob, err := session.SendInstallationRequest(ctx, []econet.Operation{
-		{
-			Name: econet.GET_COMPONENTS_ON_BUS,
-		},
-	})
+	gcob, err := session.GetComponentsOnBus(ctx)
 	if err != nil {
-		log.Fatalf("GET_COMPONENTS_ON_BUS error: %v", err)
-	}
-	log.Println(gcob)
-
-	_, err = session.SendInstallationRequest(ctx, []econet.Operation{
-		{
-			Name: econet.GET_VALUES,
-			Targets: []econet.Target{
-				{
-					Component:  "1007376820",
-					Parameters: []string{econet.PARAM_POWER_ID, econet.PARAM_SCHEDULE_ID, econet.PARAM_POWER_LEVEL_ID},
-				},
-			},
-		},
-	})
-	if err != nil {
-		log.Fatalf("GET_VALUES error: %v", err)
+		log.Fatalf("GetComponentsOnBus failed: %v", err)
 	}
 
-	_, err = session.SendInstallationRequest(ctx, []econet.Operation{
+	var targetComponentID string
+	for _, c := range gcob {
+		if c.ComponentName == "ecoVENT MINI OEM" {
+			targetComponentID = c.ComponentID
+		}
+	}
+	log.Printf("Target component: %s", targetComponentID)
+
+	_, err = session.SendInstallationRequest(ctx, []econet.OperationRequest{
 		{
 			Name: econet.PARAMS_MODIFICATION,
-			Targets: []econet.Target{
+			Targets: []econet.TargetRequest{
 				{
-					Component: "1007376820",
+					Component: targetComponentID,
 					Parameters: map[string]string{
 						econet.PARAM_SCHEDULE_ID:    econet.PARAM_SCHEDULE_AUTO,
 						econet.PARAM_POWER_LEVEL_ID: econet.PARAM_POWER_LEVEL_3,
