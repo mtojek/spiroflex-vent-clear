@@ -33,15 +33,21 @@ func (ws *WebServer) Handler() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
+	r.Get("/", ws.index)
 	r.Route("/api", func(r chi.Router) {
 		r.Route("/vent", func(r chi.Router) {
-			r.Get("/level/{level:[1-3]?}", ws.ventLevel)
-			r.Get("/pause", ws.ventPause)
-			r.Get("/mode/{mode:schedule|manual}", ws.ventMode)
-			r.Get("/power/{state:on|off}", ws.ventPower)
+			r.Post("/level/{level:[1-3]?}", ws.ventLevel)
+			r.Post("/pause", ws.ventPause)
+			r.Post("/mode/{mode:schedule|manual}", ws.ventMode)
+			r.Post("/power/{state:on|off}", ws.ventPower)
 		})
 	})
 	return r
+}
+
+func (ws *WebServer) index(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Hello world"))
 }
 
 func (ws *WebServer) ventLevel(w http.ResponseWriter, r *http.Request) {
