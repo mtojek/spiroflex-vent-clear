@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"slices"
-	"time"
 
 	"github.com/mtojek/spiroflex-vent-clear"
 	"github.com/mtojek/spiroflex-vent-clear/api"
@@ -54,12 +53,52 @@ func main() {
 		log.Fatal("Installation not found or invalid name")
 	}
 
-	_, err = client.MQTT(ctx, installations[i].ID)
+	session, err := client.MQTT(ctx, installations[i].ID)
 	if err != nil {
 		log.Fatalf("MQTT error: %v", err)
 	}
+	defer session.Disconnect()
 
-	for {
-		time.Sleep(100 * time.Millisecond)
+	gcob, err := session.SendInstallationRequest(ctx, []econet.Operation{
+		{
+			Name: econet.GET_COMPONENTS_ON_BUS,
+		},
+	})
+	if err != nil {
+		log.Fatalf("GET_COMPONENTS_ON_BUS error: %v", err)
+	}
+	log.Println(gcob)
+
+	_, err = session.SendInstallationRequest(ctx, []econet.Operation{
+		{
+			Name: econet.GET_VALUES,
+			Targets: []econet.Target{
+				{
+					Component:  "1007376820",
+					Parameters: []string{econet.PARAM_POWER_ID, econet.PARAM_SCHEDULE_ID, econet.PARAM_POWER_LEVEL_ID},
+				},
+			},
+		},
+	})
+	if err != nil {
+		log.Fatalf("GET_VALUES error: %v", err)
+	}
+
+	_, err = session.SendInstallationRequest(ctx, []econet.Operation{
+		{
+			Name: econet.PARAMS_MODIFICATION,
+			Targets: []econet.Target{
+				{
+					Component: "1007376820",
+					Parameters: map[string]string{
+						econet.PARAM_SCHEDULE_ID:    econet.PARAM_SCHEDULE_AUTO,
+						econet.PARAM_POWER_LEVEL_ID: econet.PARAM_POWER_LEVEL_3,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		log.Fatalf("PARAMS_MODIFICATION error: %v", err)
 	}
 }
