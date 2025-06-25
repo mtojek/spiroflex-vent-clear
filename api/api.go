@@ -45,12 +45,6 @@ func (ws *WebServer) Handler() http.Handler {
 }
 
 func (ws *WebServer) ventLevel(w http.ResponseWriter, r *http.Request) {
-	session, targetComponentID, err := ws.prepareEconet(r.Context())
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-
 	levelStr := chi.URLParam(r, "level")
 	level, err := strconv.Atoi(levelStr)
 	if err != nil {
@@ -58,6 +52,12 @@ func (ws *WebServer) ventLevel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	level += 2 // levels are enumerated from 3 to 5
+
+	session, targetComponentID, err := ws.prepareEconet(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 
 	err = session.VentLevel(r.Context(), targetComponentID, fmt.Sprintf("%d", level))
 	if err != nil {
@@ -83,18 +83,19 @@ func (ws *WebServer) ventPause(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ws *WebServer) ventMode(w http.ResponseWriter, r *http.Request) {
-	session, targetComponentID, err := ws.prepareEconet(r.Context())
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-
 	mode := chi.URLParam(r, "mode")
 	if mode == "schedule" {
 		mode = econet.PARAM_SCHEDULE_SCHEDULE
 	} else {
 		mode = econet.PARAM_SCHEDULE_MANUAL
 	}
+
+	session, targetComponentID, err := ws.prepareEconet(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
 	err = session.VentMode(r.Context(), targetComponentID, mode)
 	if err != nil {
 		writeError(w, fmt.Errorf("unable to modify parameters: %w", err))
@@ -104,18 +105,19 @@ func (ws *WebServer) ventMode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ws *WebServer) ventPower(w http.ResponseWriter, r *http.Request) {
-	session, targetComponentID, err := ws.prepareEconet(r.Context())
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-
 	state := chi.URLParam(r, "state")
 	if state == "on" {
 		state = econet.PARAM_POWER_ON
 	} else {
 		state = econet.PARAM_POWER_OFF
 	}
+
+	session, targetComponentID, err := ws.prepareEconet(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
 	err = session.VentPower(r.Context(), targetComponentID, state)
 	if err != nil {
 		writeError(w, fmt.Errorf("unable to modify parameters: %w", err))
