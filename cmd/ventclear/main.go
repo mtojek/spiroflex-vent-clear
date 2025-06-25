@@ -72,20 +72,7 @@ func main() {
 	}
 	log.Printf("Target component: %s", targetComponentID)
 
-	_, err = session.SendInstallationRequest(ctx, []econet.OperationRequest{
-		{
-			Name: econet.PARAMS_MODIFICATION,
-			Targets: []econet.TargetRequest{
-				{
-					Component: targetComponentID,
-					Parameters: map[string]string{
-						econet.PARAM_SCHEDULE_ID:    econet.PARAM_SCHEDULE_AUTO,
-						econet.PARAM_POWER_LEVEL_ID: econet.PARAM_POWER_LEVEL_3,
-					},
-				},
-			},
-		},
-	})
+	err = session.VentPower(ctx, targetComponentID, econet.PARAM_POWER_OFF)
 	if err != nil {
 		log.Fatalf("PARAMS_MODIFICATION error: %v", err)
 	}

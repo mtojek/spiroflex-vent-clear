@@ -77,6 +77,9 @@ func (s *MQTTSession) GetComponentsOnBus(ctx context.Context) ([]ComponentOnBus,
 			Name: GET_COMPONENTS_ON_BUS,
 		},
 	})
+	if err != nil {
+		return nil, fmt.Errorf("SendInstallationRequest failed: %w", err)
+	}
 
 	var cobs []ComponentOnBus
 	for _, op := range resp {
@@ -84,13 +87,131 @@ func (s *MQTTSession) GetComponentsOnBus(ctx context.Context) ([]ComponentOnBus,
 			var cob ComponentOnBus
 			err = json.Unmarshal(t.Parameters, &cob)
 			if err != nil {
-				return nil, fmt.Errorf("can't unmarshal ComponentOnBus struct: %w", err)
+				return nil, fmt.Errorf("can't unmarshal Parameters struct: %w", err)
 			}
 			cob.ComponentID = t.Component
 			cobs = append(cobs, cob)
 		}
 	}
 	return cobs, nil
+}
+
+func (s *MQTTSession) VentLevel(ctx context.Context, targetComponentID, level string) error {
+	resp, err := s.SendInstallationRequest(ctx, []OperationRequest{
+		{
+			Name: PARAMS_MODIFICATION,
+			Targets: []TargetRequest{
+				{
+					Component: targetComponentID,
+					Parameters: map[string]string{
+						PARAM_SCHEDULE_ID: PARAM_SCHEDULE_MANUAL,
+					},
+				},
+			},
+		},
+		{
+			Name: PARAMS_MODIFICATION,
+			Targets: []TargetRequest{
+				{
+					Component: targetComponentID,
+					Parameters: map[string]string{
+						PARAM_POWER_LEVEL_ID: level,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("SendInstallationRequest failed: %w", err)
+	}
+	return verifyParamsModificationStatus(targetComponentID, resp)
+}
+
+func (s *MQTTSession) VentPause(ctx context.Context, targetComponentID string) error {
+	resp, err := s.SendInstallationRequest(ctx, []OperationRequest{
+		{
+			Name: PARAMS_MODIFICATION,
+			Targets: []TargetRequest{
+				{
+					Component: targetComponentID,
+					Parameters: map[string]string{
+						PARAM_SCHEDULE_ID: PARAM_SCHEDULE_MANUAL,
+					},
+				},
+			},
+		},
+		{
+			Name: PARAMS_MODIFICATION,
+			Targets: []TargetRequest{
+				{
+					Component: targetComponentID,
+					Parameters: map[string]string{
+						PARAM_POWER_LEVEL_ID: PARAM_POWER_LEVEL_PAUSE,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("SendInstallationRequest failed: %w", err)
+	}
+	return verifyParamsModificationStatus(targetComponentID, resp)
+}
+
+func (s *MQTTSession) VentMode(ctx context.Context, targetComponentID, mode string) error {
+	resp, err := s.SendInstallationRequest(ctx, []OperationRequest{
+		{
+			Name: PARAMS_MODIFICATION,
+			Targets: []TargetRequest{
+				{
+					Component: targetComponentID,
+					Parameters: map[string]string{
+						PARAM_SCHEDULE_ID: mode,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("SendInstallationRequest failed: %w", err)
+	}
+	return verifyParamsModificationStatus(targetComponentID, resp)
+}
+
+func (s *MQTTSession) VentPower(ctx context.Context, targetComponentID, power string) error {
+	resp, err := s.SendInstallationRequest(ctx, []OperationRequest{
+		{
+			Name: PARAMS_MODIFICATION,
+			Targets: []TargetRequest{
+				{
+					Component: targetComponentID,
+					Parameters: map[string]string{
+						PARAM_POWER_ID: power,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("SendInstallationRequest failed: %w", err)
+	}
+	return verifyParamsModificationStatus(targetComponentID, resp)
+}
+
+func verifyParamsModificationStatus(targetComponentID string, resp []OperationResponse) error {
+	for _, op := range resp {
+		for _, t := range op.Targets {
+			if t.Component != targetComponentID {
+				continue
+			}
+
+			if t.StatusCode != 0 {
+				return fmt.Errorf("params modification failed, status code: %w", t.StatusCode)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("component not found")
 }
 
 func (s *MQTTSession) SendInstallationRequest(ctx context.Context, ops []OperationRequest) ([]OperationResponse, error) {
