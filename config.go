@@ -44,6 +44,9 @@ type Installation struct {
 
 type API struct {
 	Endpoint string
+
+	Rest  bool
+	Alexa bool
 }
 
 type Alexa struct {

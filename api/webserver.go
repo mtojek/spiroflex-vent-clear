@@ -29,18 +29,23 @@ func (ws *WebServer) Handler() http.Handler {
 	r.Use(middleware.Logger)
 
 	r.Get("/", ws.index)
-	r.Route("/api", func(r chi.Router) {
-		r.Route("/vent", func(r chi.Router) {
-			r.Post("/level/{level:[1-3]?}", ws.apiVentLevel)
-			r.Post("/pause", ws.apiVentPause)
-			r.Post("/mode/{mode:schedule|manual}", ws.apiVentMode)
-			r.Post("/power/{state:on|off}", ws.apiVentPower)
-		})
-	})
 
-	skill := alexa.New(ws.c.Alexa.AppID)
-	r.HandleFunc("/alexa", func(w http.ResponseWriter, r *http.Request) {
-		skill.HandlerFuncWithNext(w, r, ws.alexa)
-	})
+	if ws.c.API.Rest {
+		r.Route("/api", func(r chi.Router) {
+			r.Route("/vent", func(r chi.Router) {
+				r.Post("/level/{level:[1-3]?}", ws.apiVentLevel)
+				r.Post("/pause", ws.apiVentPause)
+				r.Post("/mode/{mode:schedule|manual}", ws.apiVentMode)
+				r.Post("/power/{state:on|off}", ws.apiVentPower)
+			})
+		})
+	}
+
+	if ws.c.API.Alexa {
+		skill := alexa.New(ws.c.Alexa.AppID)
+		r.HandleFunc("/alexa", func(w http.ResponseWriter, r *http.Request) {
+			skill.HandlerFuncWithNext(w, r, ws.alexa)
+		})
+	}
 	return r
 }
