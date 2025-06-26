@@ -48,4 +48,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/tbuckley/go-alexa => github.com/mtojek/go-alexa v0.0.0-20250626202310-64af6a5fccd3
+replace github.com/tbuckley/go-alexa => github.com/mtojek/go-alexa v0.0.0-20250626203155-277d7a7ad43e
