@@ -97,18 +97,12 @@ func (s *MQTTSession) GetComponentsOnBus(ctx context.Context) ([]ComponentOnBus,
 }
 
 func (s *MQTTSession) VentLevel(ctx context.Context, targetComponentID, level string) error {
+	err := s.VentMode(ctx, targetComponentID, PARAM_MODE_MANUAL)
+	if err != nil {
+		return err
+	}
+
 	resp, err := s.SendInstallationRequest(ctx, []OperationRequest{
-		{
-			Name: PARAMS_MODIFICATION,
-			Targets: []TargetRequest{
-				{
-					Component: targetComponentID,
-					Parameters: map[string]string{
-						PARAM_SCHEDULE_ID: PARAM_SCHEDULE_MANUAL,
-					},
-				},
-			},
-		},
 		{
 			Name: PARAMS_MODIFICATION,
 			Targets: []TargetRequest{
@@ -128,18 +122,12 @@ func (s *MQTTSession) VentLevel(ctx context.Context, targetComponentID, level st
 }
 
 func (s *MQTTSession) VentPause(ctx context.Context, targetComponentID string) error {
+	err := s.VentMode(ctx, targetComponentID, PARAM_MODE_MANUAL)
+	if err != nil {
+		return err
+	}
+
 	resp, err := s.SendInstallationRequest(ctx, []OperationRequest{
-		{
-			Name: PARAMS_MODIFICATION,
-			Targets: []TargetRequest{
-				{
-					Component: targetComponentID,
-					Parameters: map[string]string{
-						PARAM_SCHEDULE_ID: PARAM_SCHEDULE_MANUAL,
-					},
-				},
-			},
-		},
 		{
 			Name: PARAMS_MODIFICATION,
 			Targets: []TargetRequest{
@@ -166,7 +154,7 @@ func (s *MQTTSession) VentMode(ctx context.Context, targetComponentID, mode stri
 				{
 					Component: targetComponentID,
 					Parameters: map[string]string{
-						PARAM_SCHEDULE_ID: mode,
+						PARAM_MODE_ID: mode,
 					},
 				},
 			},

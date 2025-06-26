@@ -2,134 +2,86 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"slices"
 	"strconv"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/mtojek/spiroflex-vent-clear"
 	"github.com/mtojek/spiroflex-vent-clear/econet"
 )
 
-type WebServer struct {
-	c *spiroflex.Config
-}
-
-type response struct {
-	Ok    bool   `json:"ok"`
-	Error string `json:"error,omitempty"`
-}
-
-func NewWebServer(c *spiroflex.Config) *WebServer {
-	return &WebServer{
-		c: c,
-	}
-}
-
-func (ws *WebServer) Handler() http.Handler {
-	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-
-	r.Get("/", ws.index)
-	r.Route("/api", func(r chi.Router) {
-		r.Route("/vent", func(r chi.Router) {
-			r.Post("/level/{level:[1-3]?}", ws.ventLevel)
-			r.Post("/pause", ws.ventPause)
-			r.Post("/mode/{mode:schedule|manual}", ws.ventMode)
-			r.Post("/power/{state:on|off}", ws.ventPower)
-		})
-	})
-	return r
-}
-
-func (ws *WebServer) index(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Hello world"))
-}
-
-func (ws *WebServer) ventLevel(w http.ResponseWriter, r *http.Request) {
-	levelStr := chi.URLParam(r, "level")
+func (ws *WebServer) ventLevel(ctx context.Context, levelStr string) error {
 	level, err := strconv.Atoi(levelStr)
 	if err != nil {
-		writeError(w, err)
-		return
+		return fmt.Errorf("can't convert level to int: %w", err)
 	}
+
+	if level < 1 || level > 3 {
+		return fmt.Errorf("level must be between 1 and 3")
+	}
+
 	level += 2 // levels are enumerated from 3 to 5
 
-	session, targetComponentID, err := ws.prepareEconet(r.Context())
+	session, targetComponentID, err := ws.prepareEconet(ctx)
 	if err != nil {
-		writeError(w, err)
-		return
+		return err
 	}
 
-	err = session.VentLevel(r.Context(), targetComponentID, fmt.Sprintf("%d", level))
+	err = session.VentLevel(ctx, targetComponentID, fmt.Sprintf("%d", level))
 	if err != nil {
-		writeError(w, fmt.Errorf("unable to modify parameters: %w", err))
-		return
+		return fmt.Errorf("unable to modify parameters: %w", err)
 	}
-	writeSuccess(w)
+	return nil
 }
 
-func (ws *WebServer) ventPause(w http.ResponseWriter, r *http.Request) {
-	session, targetComponentID, err := ws.prepareEconet(r.Context())
+func (ws *WebServer) ventPause(ctx context.Context) error {
+	session, targetComponentID, err := ws.prepareEconet(ctx)
 	if err != nil {
-		writeError(w, err)
-		return
+		return err
 	}
 
-	err = session.VentPause(r.Context(), targetComponentID)
+	err = session.VentPause(ctx, targetComponentID)
 	if err != nil {
-		writeError(w, fmt.Errorf("unable to modify parameters: %w", err))
-		return
+		return fmt.Errorf("unable to modify parameters: %w", err)
 	}
-	writeSuccess(w)
+	return nil
 }
 
-func (ws *WebServer) ventMode(w http.ResponseWriter, r *http.Request) {
-	mode := chi.URLParam(r, "mode")
+func (ws *WebServer) ventMode(ctx context.Context, mode string) error {
 	if mode == "schedule" {
-		mode = econet.PARAM_SCHEDULE_SCHEDULE
+		mode = econet.PARAM_MODE_SCHEDULE
 	} else {
-		mode = econet.PARAM_SCHEDULE_MANUAL
+		mode = econet.PARAM_MODE_MANUAL
 	}
 
-	session, targetComponentID, err := ws.prepareEconet(r.Context())
+	session, targetComponentID, err := ws.prepareEconet(ctx)
 	if err != nil {
-		writeError(w, err)
-		return
+		return err
 	}
 
-	err = session.VentMode(r.Context(), targetComponentID, mode)
+	err = session.VentMode(ctx, targetComponentID, mode)
 	if err != nil {
-		writeError(w, fmt.Errorf("unable to modify parameters: %w", err))
-		return
+		return fmt.Errorf("unable to modify parameters: %w", err)
 	}
-	writeSuccess(w)
+	return nil
 }
 
-func (ws *WebServer) ventPower(w http.ResponseWriter, r *http.Request) {
-	state := chi.URLParam(r, "state")
+func (ws *WebServer) ventPower(ctx context.Context, state string) error {
 	if state == "on" {
 		state = econet.PARAM_POWER_ON
 	} else {
 		state = econet.PARAM_POWER_OFF
 	}
 
-	session, targetComponentID, err := ws.prepareEconet(r.Context())
+	session, targetComponentID, err := ws.prepareEconet(ctx)
 	if err != nil {
-		writeError(w, err)
-		return
+		return err
 	}
 
-	err = session.VentPower(r.Context(), targetComponentID, state)
+	err = session.VentPower(ctx, targetComponentID, state)
 	if err != nil {
-		writeError(w, fmt.Errorf("unable to modify parameters: %w", err))
-		return
+		return fmt.Errorf("unable to modify parameters: %w", err)
 	}
-	writeSuccess(w)
+	return nil
 }
 
 func (ws *WebServer) prepareEconet(ctx context.Context) (*econet.MQTTSession, string, error) {
@@ -168,16 +120,4 @@ func (ws *WebServer) prepareEconet(ctx context.Context) (*econet.MQTTSession, st
 		}
 	}
 	return session, targetComponentID, nil
-}
-
-func writeError(w http.ResponseWriter, err error) {
-	resp := response{Error: err.Error()}
-	w.WriteHeader(http.StatusInternalServerError)
-	json.NewEncoder(w).Encode(resp)
-}
-
-func writeSuccess(w http.ResponseWriter) {
-	resp := response{Ok: true}
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
 }

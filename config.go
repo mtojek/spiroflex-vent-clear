@@ -18,7 +18,8 @@ type Config struct {
 
 	Installation Installation
 
-	API API
+	API   API
+	Alexa Alexa
 }
 
 type CognitoConfig struct {
@@ -43,6 +44,10 @@ type Installation struct {
 
 type API struct {
 	Endpoint string
+}
+
+type Alexa struct {
+	AppID string `mapstructure:"app_id"`
 }
 
 func LoadConfig() (*Config, error) {
