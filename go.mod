@@ -47,3 +47,5 @@ require (
 	golang.org/x/text v0.21.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/tbuckley/go-alexa => github.com/mtojek/go-alexa v0.0.0-20250626202310-64af6a5fccd3
